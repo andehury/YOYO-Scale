@@ -11,7 +11,7 @@
 ## Highlights
 
 - **Generalizes Model Stock**: Recovers Model Stock as a special case under its geometric assumptions.
-- **Per-tensor adaptive coefficients**: Learns layer-wise (or even tensor-wise) λ weights via a closed-form linear system.
+- **Per-tensor adaptive coefficients**: Learns tensor-wise λ weights via a closed-form linear system.
 - **Noise-robust**: Excludes self-correlation to avoid overfitting to model-specific noise.
 - **Efficient**: No extra training; only requires loading fine-tuned checkpoints.
 - **Interpretable**: Outputs `yoyo_scale.csv` with per-model λ values for analysis.
