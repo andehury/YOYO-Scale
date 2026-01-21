@@ -1,24 +1,24 @@
 # YOYO Scale: Generalized Task Vector Scaling for Model Merging
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg)](LICENSE)
 
-**YOYO Scale** is a robust, geometry-aware model merging method that **generalizes Model Stock** by adaptively computing per-tensor fusion coefficients through consensus-based orthogonal projection. It requires no strong symmetry assumptions (e.g., thin-shell isotropy or orthogonality to the pre-trained anchor) and works reliably across diverse architectures and tasks.
+**YOYO Scale** is a robust, geometry-aware model merging method that **generalizes Model Stock** by adaptively computing per-tensor fusion coefficients through consensus-based orthogonal projection. It requires no strong symmetry assumptions and works reliably across diverse architectures and tasks.
 
 > **Key Insight**: Instead of assuming all fine-tuned models are symmetrically distributed around an ideal center (as in Model Stock), YOYO Scale *estimates* the optimal direction within the span of task vectors by maximizing agreement among cross-model weight updates.
 
 ---
 
-## 📌 Highlights
+## Highlights
 
-- ✅ **Generalizes Model Stock**: Recovers Model Stock as a special case under its geometric assumptions.
-- 🔧 **Per-tensor adaptive coefficients**: Learns layer-wise (or even tensor-wise) λ weights via a closed-form linear system.
-- 🧠 **Noise-robust**: Excludes self-correlation to avoid overfitting to model-specific noise.
-- ⚡ **Efficient**: No extra training; only requires loading fine-tuned checkpoints.
-- 📊 **Interpretable**: Outputs `yoyo_scale.csv` with per-model λ values for analysis.
+- **Generalizes Model Stock**: Recovers Model Stock as a special case under its geometric assumptions.
+- **Per-tensor adaptive coefficients**: Learns layer-wise (or even tensor-wise) λ weights via a closed-form linear system.
+- **Noise-robust**: Excludes self-correlation to avoid overfitting to model-specific noise.
+- **Efficient**: No extra training; only requires loading fine-tuned checkpoints.
+- **Interpretable**: Outputs `yoyo_scale.csv` with per-model λ values for analysis.
 
 ---
 
-## 📘 Theoretical Foundation
+## Theoretical Foundation
 
 ### 1. Problem Setup
 
@@ -111,7 +111,7 @@ merge_models_yoyo_scale(
 
 ---
 
-## 📁 Directory Structure
+## Directory Structure
 ```
 yoyo_scale/
 ├── yoyo_scale.py          # Core implementation
@@ -123,13 +123,13 @@ yoyo_scale/
 
 ---
 
-## 📜 License
+## License
 
 This project is licensed under the **Apache License 2.0** — see [LICENSE](LICENSE) for details.
 
 ---
 
-## 📚 References
+## References
 
 - Jang, D.-H., Yun, S., & Han, D. (2024). **Model Stock: All we need is just a few fine-tuned models**. arXiv:2403.19522.  
   [Paper](https://arxiv.org/abs/2403.19522) | [Code](https://github.com/naver-ai/model-stock)
@@ -138,6 +138,6 @@ This project is licensed under the **Apache License 2.0** — see [LICENSE](LICE
 
 ---
 
-## 🙌 Acknowledgements
+## Acknowledgements
 
 Inspired by the geometric elegance of **Model Stock** and the practicality of **task arithmetic**. Designed for researchers and engineers who want principled, efficient, and interpretable model merging.
