@@ -165,7 +165,7 @@ Thus, **YOYO Scale generalizes Model Stock** by removing the need for strict sym
 
 ---
 
-## 🛠️ Usage
+## Usage
 
 ### Installation
 ```bash
