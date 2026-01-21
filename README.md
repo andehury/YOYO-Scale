@@ -202,10 +202,8 @@ merge_models_yoyo_scale(
 ```
 yoyo_scale/
 ├── yoyo_scale.py          # Core implementation
-├── README.md
-├── LICENSE                # Apache 2.0
-└── examples/
-    └── merge_qwen.py      # Example script
+├── README.md              
+└── LICENSE                # Apache 2.0
 ```
 
 ---
