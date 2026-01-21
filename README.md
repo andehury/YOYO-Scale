@@ -1,4 +1,4 @@
-# YOYO-Scale: Generalized Task Vector Scaling for Model Merging
+# YOYO-Scale: Training-Free Geometric Optimization for Task Vector Scaling
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg)](LICENSE)
 
