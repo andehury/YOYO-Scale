@@ -222,13 +222,13 @@ def merge_models_yoyo_scale(
 # --- Main Execution ---
 if __name__ == "__main__":
     fine_tuned_model_dirs = [
-        r"path/to/model_A",
-        r"path/to/model_B",
-        r"path/to/model_C",
+        r"path/to/ft_model_1",
+        r"path/to/ft_model_2",
+        r"path/to/ft_model_3",
     ]
 
     path_base_model = r"path/to/model_base"
-    output_dir = r"path/to/merged_model"
+    output_dir = r"path/to/model_merged"
     config_index = 0
 
     errors = []
@@ -249,4 +249,5 @@ if __name__ == "__main__":
         base_path=path_base_model,
         output_path=output_dir,
         config_source_index=config_index
+
     )
