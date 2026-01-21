@@ -1,4 +1,4 @@
-# YOYO-Scale: Geometry-Guided Task Vector Scaling Without Training
+# YOYO-Scale: Geometry-Driven Task Vector Scaling Without Training
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg)](LICENSE)
 
