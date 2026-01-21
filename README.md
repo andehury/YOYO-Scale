@@ -1,8 +1,8 @@
-# YOYO Scale: Generalized Task Vector Scaling for Model Merging
+# YOYO-Scale: Generalized Task Vector Scaling for Model Merging
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg)](LICENSE)
 
-**YOYO Scale** is a robust, geometry-aware model merging method that **generalizes Model Stock** by adaptively computing per-tensor fusion coefficients through consensus-based orthogonal projection. It requires no strong symmetry assumptions and works reliably across diverse architectures and tasks.
+**YOYO-Scale** is a robust, geometry-aware model merging method that **generalizes Model Stock** by adaptively computing per-tensor fusion coefficients through consensus-based orthogonal projection. It requires no strong symmetry assumptions and works reliably across diverse architectures and tasks.
 
 > **Key Insight**: Instead of assuming all fine-tuned models are symmetrically distributed around an ideal center (as in Model Stock), YOYO Scale *estimates* the optimal direction within the span of task vectors by maximizing agreement among cross-model weight updates.
 
