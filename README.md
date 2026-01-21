@@ -131,7 +131,7 @@ This project is licensed under the **Apache License 2.0** — see [LICENSE](LICE
 
 ## References
 
-- Jang, D.-H., Yun, S., & Han, D. (2024). **Model Stock: All we need is just a few fine-tuned models**. arXiv:2403.19522.  
+- **Model Stock: All we need is just a few fine-tuned models**. arXiv:2403.19522.  
   [Paper](https://arxiv.org/abs/2403.19522) | [Code](https://github.com/naver-ai/model-stock)
 
 > YOYO Scale builds upon Model Stock’s geometric insights but replaces its rigid analytic solution with a flexible, data-driven solver that works in realistic, asymmetric settings.
