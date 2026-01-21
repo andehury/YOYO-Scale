@@ -227,8 +227,8 @@ if __name__ == "__main__":
         r"path/to/ft_model_3",
     ]
 
-    path_base_model = r"path/to/model_base"
-    output_dir = r"path/to/model_merged"
+    path_base_model = r"path/to/base_model"
+    output_dir = r"path/to/merged_model"
     config_index = 0
 
     errors = []
@@ -251,3 +251,4 @@ if __name__ == "__main__":
         config_source_index=config_index
 
     )
+
