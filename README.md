@@ -201,9 +201,9 @@ merge_models_yoyo_scale(
 ## Directory Structure
 ```
 YOYO-Scale/
-├── YOYO-Scale.py          # Core implementation
+├── LICENSE.txt            # Apache 2.0
 ├── README.md              
-└── LICENSE.txt            # Apache 2.0
+└── YOYO-Scale.py          # Core implementation
 ```
 
 ---
