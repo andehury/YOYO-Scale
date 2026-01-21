@@ -203,7 +203,7 @@ merge_models_yoyo_scale(
 YOYO-Scale/
 ├── YOYO-Scale.py          # Core implementation
 ├── README.md              
-└── LICENSE                # Apache 2.0
+└── LICENSE.txt            # Apache 2.0
 ```
 
 ---
