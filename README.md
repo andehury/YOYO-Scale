@@ -20,59 +20,146 @@
 
 ## Theoretical Foundation
 
-### 1. Problem Setup
+### Step 1: Problem Setup and Notation
 
-Given:
-- A base model weight: `w0`
-- `N` fine-tuned models: `w1, ..., wN`
-- Task vectors: `vi = wi - w0`
+- Without loss of generality, set the base model weight as the origin: `w0 = 0` (since all operations are translation-invariant).
+- We have `N` fine-tuned models with weights: `w1, w2, ..., wN`.
+- Define task vectors: `vi = wi - w0 = wi`.
+- Assume there exists an unknown "ideal center" `mu`, representing the common target of all fine-tuning tasks.
+- Our goal is to find a merged weight `w_H` that lies in the span of `{v1, ..., vN}` and is as close as possible to `mu`.
 
-We seek a merged weight:  
-`w_merged = w0 + sum_{i=1}^N lambda_i * vi`
-
----
-
-### 2. Optimal Condition: Consensus Maximization
-
-YOYO Scale posits that the best update direction `Delta = sum_i lambda_i * vi` should be maximally aligned with the common signal shared across all fine-tuned models.
-
-Under the thin-shell hypothesis (weights lie on a high-dimensional shell), the inner product `vi · vj` for `i != j` estimates the squared norm of the true center `||mu||^2`, while `||vi||^2` includes noise variance.
-
-Thus, we define the target vector:  
-`b_j = (1 / (N - 1)) * sum_{i != j} (vi · vj)`
+Thus, we write:
+```
+w_H = sum_{i=1}^N lambda_i * vi = V * lambda
+```
+where `V` is an `N x d` matrix whose rows are `v1, ..., vN`, and `lambda` is an `N`-dimensional coefficient vector.
 
 ---
 
-### 3. Linear System
+### Step 2: Optimality Condition — Orthogonal Projection
 
-Let `G` be the Gram matrix of size `N x N`, where:  
-`G[i, j] = vi · vj`
+In Euclidean space, `w_H` is the best approximation of `mu` within the subspace if and only if the residual `(mu - w_H)` is orthogonal to every basis vector `vj`:
+```
+(mu - w_H) · vj = 0,    for all j = 1, ..., N
+```
 
-Solve the linear system:  
-`G * lambda = b`
+Substituting `w_H = sum_i lambda_i * vi`, we get:
+```
+mu · vj = sum_{i=1}^N lambda_i * (vi · vj)
+```
+
+In matrix form, this becomes:
+```
+G * lambda = b
+```
+where:
+- `G[i, j] = vi · vj` (the Gram matrix),
+- `b[j] = mu · vj`.
+
+This is the **universal starting point** for all projection-based merging methods.
 
 ---
 
-### 4. Constraints for Stability
+### Step 3: Estimating `b` Using Model Stock’s Geometric Assumptions
 
-- **Non-negativity**: `lambda_i >= 0` → clamp negative values to zero.
-- **Normalization**: If `sum(lambda_i) > 1`, scale all `lambda_i` by `1 / sum(lambda_i)` to prevent overshooting.
+Since `mu` is unobservable, we use insights from Model Stock:
+
+#### **Assumption A (Orthogonal Anchor)**:
+The vector from each fine-tuned model to the center is perpendicular to the vector from the base model to the center:
+```
+(wi - mu) ⟂ (w0 - mu)
+```
+Since `w0 = 0`, this implies:
+```
+(vi - mu) · (-mu) = 0  →  vi · mu = ||mu||^2
+```
+So theoretically, **`b[j] = ||mu||^2` for all `j`** — a constant.
+
+#### **Assumption B (Independent Noise / Thin Shell)**:
+For `i ≠ j`, the noise vectors are approximately orthogonal:
+```
+(wi - mu) ⟂ (wj - mu)
+```
+Expanding gives:
+```
+vi · vj = ||mu||^2,    for i ≠ j
+```
+But the self-inner product includes noise variance:
+```
+||vi||^2 = ||mu||^2 + ||wi - mu||^2 = ||mu||^2 + sigma^2
+```
+where `sigma^2` is the noise variance.
+
+> **Key Insight**:  
+> - **Cross-model inner products** (`vi · vj` for `i ≠ j`) provide an **unbiased estimate** of `||mu||^2`.  
+> - **Self-inner products** (`||vi||^2`) are **contaminated by noise variance**.
+
+Therefore, to robustly estimate `b[j] = ||mu||^2`, we **exclude the self-term** and average over other models:
+```
+b[j] = (1 / (N - 1)) * sum_{i ≠ j} (vi · vj)
+```
+This is the **core innovation of YOYO Scale**.
 
 ---
 
-### 5. Connection to Model Stock
+### Step 4: Solving the System with Stability Constraints
 
-When fine-tuned models satisfy:
-- `||vi|| = l` (constant norm)
-- `vi · vj = l^2 * cos(theta)` for all `i != j` (constant pairwise similarity)
+We solve:
+```
+G * lambda = b
+```
 
-Then the solution is uniform: `lambda = alpha * [1, 1, ..., 1]`, and YOYO Scale reduces to:
+Because `G` may be ill-conditioned, we add a small regularization term:
+```
+(G + epsilon * I) * lambda = b,    where epsilon = 1e-12
+```
 
-`w_merged = t * w_avg + (1 - t) * w0`  
-where  
-`t = (N * cos(theta)) / (1 + (N - 1) * cos(theta))`
+To ensure physical meaning and numerical stability, we apply two constraints:
+1. **Non-negativity**: `lambda_i >= 0` → clamp negative values to zero.
+2. **Normalization**: If `sum(lambda_i) > 1`, scale all coefficients by `1 / sum(lambda_i)` to prevent overshooting.
 
-This is exactly **Model Stock** (Equation 3 in the paper).
+The final merged weight is:
+```
+w_merged = w0 + sum_{i=1}^N lambda_i * (wi - w0)
+```
+
+---
+
+### Step 5: Showing Model Stock Is a Special Case of YOYO Scale
+
+Under Model Stock’s strong symmetry assumptions:
+- `||vi||^2 = l^2` (constant norm),
+- `vi · vj = l^2 * cos(theta)` for all `i ≠ j` (constant pairwise similarity).
+
+Then the Gram matrix becomes:
+```
+G = l^2 * [ (1 - cos(theta)) * I + cos(theta) * ones(N, N) ]
+```
+and the target vector is:
+```
+b = l^2 * cos(theta) * [1, 1, ..., 1]^T
+```
+
+By symmetry, the solution must be uniform: `lambda = alpha * [1, 1, ..., 1]`.
+
+Substituting into `G * lambda = b`:
+```
+l^2 * [ (1 - cos(theta)) * alpha + N * cos(theta) * alpha ] = l^2 * cos(theta)
+→ alpha = cos(theta) / (1 + (N - 1) * cos(theta))
+```
+
+The total weight sum is:
+```
+t = sum(lambda_i) = N * alpha = (N * cos(theta)) / (1 + (N - 1) * cos(theta))
+```
+
+Thus, the merged weight becomes:
+```
+w_merged = t * w_avg + (1 - t) * w0
+```
+where `w_avg = (1/N) * sum_i wi`.
+
+This is exactly **Model Stock**.
 
 Thus, **YOYO Scale generalizes Model Stock** by removing the need for strict symmetry assumptions.
 
