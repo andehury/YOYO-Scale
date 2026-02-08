@@ -121,7 +121,7 @@ b = (G * 1 - diag(G)) / (N - 1)
 
 ---
 
-### Step 4: Constrained YOYO Scale Solver (No Clamp/Normalize Post-hoc)
+### Step 4: Constrained YOYO Scale Solver
 
 YOYO-Scale solves the **convex QP** directly:
 ```
