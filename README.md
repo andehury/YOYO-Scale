@@ -190,7 +190,7 @@ Hence **YOYO-Scale generalizes Model Stock** by removing strict symmetry require
 
 ## Simulation Results
 
-We validate YOYO-Scale on a controlled geometric simulation that exactly matches the theoretical setup: N fine-tuned models are generated as wi = mu + noise_i, where the true center mu is at distance 5.0 from the base `w0`, and each model has an independent isotropic noise component with mean radius 12.0 (std 6.0). This creates a deliberately challenging, asymmetric scenario where noise radii vary significantly across models.
+We validate YOYO-Scale on a controlled geometric simulation that exactly matches the theoretical setup: N fine-tuned models are generated as wi = mu + noise_i, where the true center mu is at distance 5.0 from the base w0, and each model has an independent isotropic noise component with mean radius 12.0 (std 6.0). This creates a deliberately challenging, asymmetric scenario where noise radii vary significantly across models.
 
 The key metric is **win probability**: the fraction of runs where each merging method produces a result **closer to the true center** than the **best single fine-tuned model** (i.e., the one with the smallest noise radius). A win probability above 50% means the method systematically outperforms cherry-picking.
 
