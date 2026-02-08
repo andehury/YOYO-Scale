@@ -377,9 +377,3 @@ This project is licensed under the **Apache License 2.0** — see [LICENSE](LICE
 ## Acknowledgements
 
 Inspired by the geometric elegance of **Model Stock** and the practicality of **task arithmetic**. Designed for researchers and engineers who want principled, efficient, and interpretable model merging.
-
----
-
-## Acknowledgements
-
-Inspired by the geometric elegance of **Model Stock** and the practicality of **task arithmetic**. Designed for researchers and engineers who want principled, efficient, and interpretable model merging.
