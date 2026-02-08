@@ -32,17 +32,20 @@ def calculate_yoyo_scale_weight(
     """
     Compute merged tensor using YOYO Scale method.
 
-    Args:
-        base_tensor (torch.Tensor): Base model weight tensor.
-        model_tensors (List[torch.Tensor]): List of fine-tuned model weight tensors.
+    Optimization (per tensor):
+        min_{lambda}  0.5 * lambda^T (G + eps I) lambda - b^T lambda
+        s.t.          lambda >= 0,  sum(lambda) <= 1
 
-    Returns:
-        Tuple[torch.Tensor, List[float]]: Merged tensor and per-model lambda coefficients.
+    where:
+        v_i = (w_i - w0),  vs = stack(v_i) in R^{N x D}
+        G = vs vs^T
+        b_j = mean_{i != j} <v_i, v_j>  (YOYO estimate; excludes diagonal/noise term)
     """
     N = len(model_tensors)
     if N == 0:
         return base_tensor.clone(), []
 
+    # Keep original behavior for N==1 (cannot estimate b from cross terms).
     if N == 1:
         return model_tensors[0].clone(), [1.0]
 
@@ -51,31 +54,111 @@ def calculate_yoyo_scale_weight(
     # vs: [N, D], where each row is (w_i - w0)
     vs = torch.stack([(w.flatten().to(torch.float64) - w0) for w in model_tensors], dim=0)
 
-    # 1. Compute Gram matrix: G[i, j] = v_i · v_j
+    # 1) Gram matrix: G[i, j] = v_i · v_j
     G = torch.mm(vs, vs.t())
 
-    # 2. Compute target vector b: b_j = mean_{i != j} (v_i · v_j)
-    # Sum over rows excluding diagonal
+    # 2) YOYO estimate for b: b_j = mean_{i != j} (v_i · v_j)
     b = (G.sum(dim=1) - G.diagonal()) / (N - 1)
 
-    # 3. Solve linear system G * lambda = b
-    try:
-        eps = 1e-12 * torch.eye(N, device=G.device, dtype=torch.float64)
-        lambdas = torch.linalg.solve(G + eps, b)
-    except torch.linalg.LinAlgError:
-        lambdas = torch.linalg.lstsq(G, b.unsqueeze(1)).solution.squeeze()
+    # 3) Solve the constrained QP:
+    #       min 0.5*lambda^T H lambda - b^T lambda
+    #       s.t. lambda>=0, 1^T lambda <= 1
+    #
+    #    KKT-based active-set (primal-dual) in N-dim; N is typically small.
+    eps = 1e-12
+    H = G + eps * torch.eye(N, device=G.device, dtype=torch.float64)
 
-    # 4. Clamp negative values to zero (non-negative constraint)
+    tol = 1e-12
+    max_iter = 10 * N + 50
+
+    lambdas = torch.zeros(N, device=G.device, dtype=torch.float64)
+
+    # Active set mask for lambda_i > 0
+    active = torch.ones(N, device=G.device, dtype=torch.bool)
+
+    # Helper to solve restricted system robustly
+    # Helper to solve restricted system robustly
+    def _solve(H_sub: torch.Tensor, y_sub: torch.Tensor) -> torch.Tensor:
+        try:
+            return torch.linalg.solve(H_sub, y_sub)
+        except torch.linalg.LinAlgError:
+            # Fall back to the least squares; ensure correct shape
+            result = torch.linalg.lstsq(H_sub, y_sub.unsqueeze(1))
+            sol = result.solution.squeeze(1)
+            # Ensure same dtype and device
+            return sol.to(dtype=y_sub.dtype, device=y_sub.device)
+
+    for _ in range(max_iter):
+        idx = torch.nonzero(active, as_tuple=False).squeeze(1)
+        if idx.numel() == 0:
+            lambdas.zero_()
+            break
+
+        Hs = H.index_select(0, idx).index_select(1, idx)
+        bs = b.index_select(0, idx)
+        ones_s = torch.ones(idx.numel(), device=G.device, dtype=torch.float64)
+
+        # Candidate with nu = 0 (sum constraint inactive)
+        v = _solve(Hs, bs)  # v = Hs^{-1} b_s
+        sum_v = float(v.sum().item())
+
+        nu_val = 0.0
+        if sum_v > 1.0 + tol:
+            # Enforce sum constraint as active: sum(lambda)=1, nu>=0
+            u = _solve(Hs, ones_s)  # u = Hs^{-1} 1
+            denom = float((ones_s @ u).item())
+            if abs(denom) > 1e-30:
+                nu_tmp = (sum_v - 1.0) / denom
+                # For inequality constraint, require nu>=0; else keep nu=0
+                if nu_tmp > 0.0:
+                    nu_val = float(nu_tmp)
+                    v = v - nu_val * u  # lambda_s = Hs^{-1}(b_s - nu*1)
+
+        lambdas_new = torch.zeros_like(lambdas)
+        lambdas_new[idx] = v
+
+        # Primal feasibility on non-negativity: if violated, drop those vars from active set
+        neg_mask = lambdas_new[idx] <= tol
+        if bool(neg_mask.any().item()):
+            active[idx[neg_mask]] = False
+            continue
+
+        # Dual feasibility for inactive constraints:
+        #   gamma = H lambda - b + nu*1  must satisfy gamma_i >= 0 for inactive i
+        g = torch.mv(H, lambdas_new) - b + nu_val * torch.ones_like(b)
+
+        inactive = ~active
+        if bool(inactive.any().item()):
+            g_inact = g[inactive]
+            min_g = float(g_inact.min().item())
+            if min_g < -tol:
+                # Add the most violating inactive variable back to active set
+                inact_idx = torch.nonzero(inactive, as_tuple=False).squeeze(1)
+                viol_local = int(torch.argmin(g_inact).item())
+                viol_idx = int(inact_idx[viol_local].item())
+                active[viol_idx] = True
+                continue
+
+        # Also ensure inequality sum constraint consistency:
+        # if nu==0, allow sum<=1; if nu>0, sum should be ~1
+        t_sum = float(lambdas_new.sum().item())
+        if nu_val == 0.0 and t_sum > 1.0 + 1e-8:
+            # Numerical guard: if slightly above, activate sum constraint next round by forcing active remain
+            # (will be handled naturally next iter), but also avoid infinite loop:
+            pass
+
+        lambdas = lambdas_new
+        break
+
+    # Numerical cleanup: enforce constraints softly
     lambdas = torch.clamp(lambdas, min=0.0)
-
-    # 5. Normalize if sum > 1 to prevent overshooting
     t_sum = lambdas.sum()
     if t_sum > 1.0:
-        lambdas = lambdas / t_sum
+        lambdas = lambdas / t_sum  # should rarely trigger if QP solved well
 
     final_lambdas_list = lambdas.tolist()
 
-    # 6. Compute final update: w = w0 + sum(lambda_i * v_i)
+    # 4) Compute final update: w = w0 + sum(lambda_i * v_i)
     update = torch.mv(vs.t(), lambdas)
     merged_flat = w0 + update
     merged = merged_flat.view_as(base_tensor).to(base_tensor.dtype)
@@ -251,4 +334,5 @@ if __name__ == "__main__":
         config_source_index=config_index
 
     )
+
 
