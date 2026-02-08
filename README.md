@@ -2,18 +2,19 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg)](LICENSE)
 
-**YOYO-Scale** is a robust, geometry-aware model merging method that **generalizes Model Stock** by adaptively computing per-tensor fusion coefficients through consensus-based orthogonal projection. It requires no strong symmetry assumptions and works reliably across diverse architectures and tasks.
+**YOYO-Scale** is a robust, geometry-aware model merging method that **generalizes Model Stock** by computing **per-tensor, nonnegative fusion coefficients under an anchor-preserving constraint**. It requires no extra training and works reliably in realistic (asymmetric) settings.
 
-> **Key Insight**: Instead of assuming all fine-tuned models are symmetrically distributed around an ideal center (as in Model Stock), YOYO Scale *estimates* the optimal direction within the span of task vectors by maximizing agreement among cross-model weight updates.
+> **Key Insight**: Instead of relying on Model Stock’s strong symmetry assumptions (e.g., identical pairwise angles), YOYO-Scale formulates merging as a **constrained convex optimization** that (i) estimates the unknown center-consensus direction from cross-model agreement and (ii) finds the best merged tensor **within the convex hull of `{base, fine-tuned models}`**.
 
 ---
 
 ## Highlights
 
 - **Generalizes Model Stock**: Recovers Model Stock as a special case under its geometric assumptions.
-- **Per-tensor adaptive coefficients**: Learns tensor-wise λ weights via a closed-form linear system.
-- **Noise-robust**: Excludes self-correlation to avoid overfitting to model-specific noise.
-- **Efficient**: No extra training; only requires loading fine-tuned checkpoints.
+- **Anchor-preserving by design**: Ensures the merged weight stays within the convex hull of `{w0, w1, ..., wN}` via `λ_i ≥ 0` and `∑ λ_i ≤ 1`.
+- **Per-tensor adaptive coefficients**: Solves a **constrained quadratic program** to obtain tensor-wise λ weights.
+- **Noise-robust**: Estimates the center-consensus signal using **cross-model inner products**, excluding self-correlation that is contaminated by model-specific noise.
+- **Efficient**: No extra training; only requires loading fine-tuned checkpoints and computing small Gram systems per tensor.
 - **Interpretable**: Outputs `yoyo_scale.csv` with per-model λ values for analysis.
 
 ---
@@ -22,58 +23,74 @@
 
 ### Step 1: Problem Setup and Notation
 
-- Without loss of generality, set the base model weight as the origin: `w0 = 0` (since all operations are translation-invariant).
+- Let the base (anchor) model weight be `w0`. All operations are translation-invariant, so we work in task-vector space.
 - We have `N` fine-tuned models with weights: `w1, w2, ..., wN`.
-- Define task vectors: `vi = wi - w0 = wi`.
-- Assume there exists an unknown "ideal center" `mu`, representing the common target of all fine-tuning tasks.
-- Our goal is to find a merged weight `w_H` that lies in the span of `{v1, ..., vN}` and is as close as possible to `mu`.
+- Define task vectors:
+  ```
+  vi = wi - w0
+  ```
+- Assume there exists an unknown “ideal center” `mu`, representing the common target of fine-tuning.
 
-Thus, we write:
+We seek a merged weight that **keeps anchor influence**:
 ```
-w_H = sum_{i=1}^N lambda_i * vi = V * lambda
+w_merged = w0 + sum_{i=1}^N lambda_i * vi
 ```
-where `V` is an `N x d` matrix whose rows are `v1, ..., vN`, and `lambda` is an `N`-dimensional coefficient vector.
+with constraints:
+- `lambda_i ≥ 0`
+- `sum(lambda_i) ≤ 1`
+
+Equivalently:
+```
+w_merged = (1 - sum(lambda)) * w0 + sum_i lambda_i * wi
+```
+so the result stays inside `conv({w0, w1, ..., wN})`.
+
+Let:
+- `V` be the matrix stacking vectors `v1, ..., vN`,
+- `lambda` be the coefficient vector.
 
 ---
 
-### Step 2: Optimality Condition — Orthogonal Projection
+### Step 2: Objective — Closest Point to the Unknown Center Under Constraints
 
-In Euclidean space, `w_H` is the best approximation of `mu` within the subspace if and only if the residual `(mu - w_H)` is orthogonal to every basis vector `vj`:
+The ideal goal is:
 ```
-(mu - w_H) · vj = 0,    for all j = 1, ..., N
-```
-
-Substituting `w_H = sum_i lambda_i * vi`, we get:
-```
-mu · vj = sum_{i=1}^N lambda_i * (vi · vj)
+minimize || mu - (w0 + V * lambda) ||^2
+subject to lambda_i >= 0,  sum(lambda_i) <= 1
 ```
 
-In matrix form, this becomes:
+This is the *anchor-preserving constrained projection* of the unknown center onto the feasible merge simplex.
+
+Expanding the squared distance yields a quadratic objective:
 ```
-G * lambda = b
+0.5 * lambda^T * G * lambda - b^T * lambda
 ```
 where:
-- `G[i, j] = vi · vj` (the Gram matrix),
-- `b[j] = mu · vj`.
+- `G[i, j] = vi · vj` is the Gram matrix,
+- `b[i] = vi · (mu - w0)`.
 
-This is the **universal starting point** for all projection-based merging methods.
+Thus the constrained merging problem becomes:
+```
+min_{lambda >= 0, sum(lambda) <= 1}  0.5 * lambda^T G lambda - b^T lambda
+```
 
 ---
 
-### Step 3: Estimating `b` Using Model Stock’s Geometric Assumptions
+### Step 3: Estimating `b` Without Observing `mu` (Cross-Model Consensus)
 
-Since `mu` is unobservable, we use insights from Model Stock:
+Since `mu` is unobservable, YOYO-Scale estimates `b` using Model Stock’s geometric insights.
 
 #### **Assumption A (Orthogonal Anchor)**:
 The vector from each fine-tuned model to the center is perpendicular to the vector from the base model to the center:
 ```
 (wi - mu) ⟂ (w0 - mu)
 ```
-Since `w0 = 0`, this implies:
+This implies:
 ```
-(vi - mu) · (-mu) = 0  →  vi · mu = ||mu||^2
+(wi - w0) · (mu - w0) = ||mu - w0||^2
+=> vi · (mu - w0) = constant
 ```
-So theoretically, **`b[j] = ||mu||^2` for all `j`** — a constant.
+So theoretically, **`b[i]` is the same constant for all i**.
 
 #### **Assumption B (Independent Noise / Thin Shell)**:
 For `i ≠ j`, the noise vectors are approximately orthogonal:
@@ -82,70 +99,75 @@ For `i ≠ j`, the noise vectors are approximately orthogonal:
 ```
 Expanding gives:
 ```
-vi · vj = ||mu||^2,    for i ≠ j
+vi · vj = ||mu - w0||^2,    for i ≠ j
 ```
 But the self-inner product includes noise variance:
 ```
-||vi||^2 = ||mu||^2 + ||wi - mu||^2 = ||mu||^2 + sigma^2
+||vi||^2 = ||mu - w0||^2 + noise
 ```
-where `sigma^2` is the noise variance.
 
-> **Key Insight**:  
-> - **Cross-model inner products** (`vi · vj` for `i ≠ j`) provide an **unbiased estimate** of `||mu||^2`.  
-> - **Self-inner products** (`||vi||^2`) are **contaminated by noise variance**.
+> **Key Insight**:
+> - **Cross-model inner products** (`vi · vj` for `i ≠ j`) are robust consensus signals.
+> - **Self-inner products** (`||vi||^2`) are contaminated by model-specific noise.
 
-Therefore, to robustly estimate `b[j] = ||mu||^2`, we **exclude the self-term** and average over other models:
+Therefore YOYO-Scale estimates `b` by excluding the diagonal:
 ```
 b[j] = (1 / (N - 1)) * sum_{i ≠ j} (vi · vj)
 ```
-This is the **core innovation of YOYO Scale**.
+In matrix form:
+```
+b = (G * 1 - diag(G)) / (N - 1)
+```
 
 ---
 
-### Step 4: Solving the System with Stability Constraints
+### Step 4: Constrained YOYO Scale Solver (No Clamp/Normalize Post-hoc)
 
-We solve:
+YOYO-Scale solves the **convex QP** directly:
 ```
-G * lambda = b
+min_{lambda >= 0, sum(lambda) <= 1}  0.5 * lambda^T (G + eps I) lambda - b^T lambda
 ```
+where `eps ~ 1e-12` stabilizes ill-conditioned Gram matrices.
 
-Because `G` may be ill-conditioned, we add a small regularization term:
-```
-(G + epsilon * I) * lambda = b,    where epsilon = 1e-12
-```
+This replaces the heuristic pipeline:
+- solve `G lambda = b`
+- then clamp / renormalize
 
-To ensure physical meaning and numerical stability, we apply two constraints:
-1. **Non-negativity**: `lambda_i >= 0` → clamp negative values to zero.
-2. **Normalization**: If `sum(lambda_i) > 1`, scale all coefficients by `1 / sum(lambda_i)` to prevent overshooting.
+with a principled optimization that enforces:
+- **non-negativity**
+- **anchor-preserving sum constraint**
+as part of the optimality conditions (KKT).
 
 The final merged weight is:
 ```
-w_merged = w0 + sum_{i=1}^N lambda_i * (wi - w0)
+w_merged = w0 + sum_i lambda_i * (wi - w0)
 ```
 
 ---
 
-### Step 5: Showing Model Stock Is a Special Case of YOYO Scale
+### Step 5: Showing Model Stock Is a Special Case of YOYO-Scale
 
 Under Model Stock’s strong symmetry assumptions:
 - `||vi||^2 = l^2` (constant norm),
-- `vi · vj = l^2 * cos(theta)` for all `i ≠ j` (constant pairwise similarity).
+- `vi · vj = l^2 * cos(theta)` for all `i ≠ j` (constant pairwise similarity),
 
-Then the Gram matrix becomes:
+the Gram matrix becomes:
 ```
 G = l^2 * [ (1 - cos(theta)) * I + cos(theta) * ones(N, N) ]
 ```
-and the target vector is:
+and the estimated target vector is uniform:
 ```
 b = l^2 * cos(theta) * [1, 1, ..., 1]^T
 ```
 
-By symmetry, the solution must be uniform: `lambda = alpha * [1, 1, ..., 1]`.
-
-Substituting into `G * lambda = b`:
+By symmetry, the optimal solution is uniform:
 ```
-l^2 * [ (1 - cos(theta)) * alpha + N * cos(theta) * alpha ] = l^2 * cos(theta)
-→ alpha = cos(theta) / (1 + (N - 1) * cos(theta))
+lambda = alpha * [1, 1, ..., 1]
+```
+
+Solving the (unconstrained) normal equation `G lambda = b` gives:
+```
+alpha = cos(theta) / (1 + (N - 1) * cos(theta))
 ```
 
 The total weight sum is:
@@ -153,15 +175,14 @@ The total weight sum is:
 t = sum(lambda_i) = N * alpha = (N * cos(theta)) / (1 + (N - 1) * cos(theta))
 ```
 
-Thus, the merged weight becomes:
+Thus the merged weight becomes:
 ```
-w_merged = t * w_avg + (1 - t) * w0
+w_merged = (1 - t) * w0 + t * w_avg
 ```
 where `w_avg = (1/N) * sum_i wi`.
 
-This is exactly **Model Stock**.
-
-Thus, **YOYO Scale generalizes Model Stock** by removing the need for strict symmetry assumptions.
+This is exactly **Model Stock**.  
+Hence **YOYO-Scale generalizes Model Stock** by removing strict symmetry requirements while retaining anchor-preserving geometry.
 
 ---
 
@@ -202,7 +223,7 @@ merge_models_yoyo_scale(
 ```
 YOYO-Scale/
 ├── LICENSE.txt            # Apache 2.0
-├── README.md              
+├── README.md
 └── YOYO-Scale.py          # Core implementation
 ```
 
@@ -219,7 +240,7 @@ This project is licensed under the **Apache License 2.0** — see [LICENSE](LICE
 - **Model Stock: All we need is just a few fine-tuned models**. arXiv:2403.19522.  
   [Paper](https://arxiv.org/abs/2403.19522) | [Code](https://github.com/naver-ai/model-stock)
 
-> YOYO Scale builds upon Model Stock’s geometric insights but replaces its rigid analytic solution with a flexible, data-driven solver that works in realistic, asymmetric settings.
+> YOYO-Scale builds upon Model Stock’s geometric insights but replaces its rigid analytic solution with a **constraint-aware, convex optimization** that remains effective in asymmetric, noisy real-world settings.
 
 ---
 
