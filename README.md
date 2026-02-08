@@ -280,7 +280,7 @@ The model with the smallest noise (r=6.76) receives the largest weight (0.232), 
 
 1. **YOYO-Scale maintains >97% win probability across all N**, while Model Stock drops below 50% at N=10.
 
-2. **Absolute quality improves with more models**: average distance scales as approximately `O(1/√N)`.
+2. **Absolute quality improves with more models**: average distance scales as approximately O(1/√N).
 
    | N | YOYO-Scale Avg Dist | Improvement vs Best Single |
    |---|---|---|
@@ -288,11 +288,11 @@ The model with the smallest noise (r=6.76) receives the largest weight (0.232), 
    | 5 | 2.571 | 2.1× closer to μ |
    | 10 | 1.722 | 1.9× closer to μ |
 
-3. **Per-model weighting is essential at large N**: Model Stock (scalar `t`, equal weights) drops to 46% win rate at N=10. The per-model λ coefficients let YOYO-Scale exploit heterogeneous model quality — assigning near-zero weight to noisy models and concentrating on the best ones — while still benefiting from noise cancellation across all models.
+3. **Per-model weighting is essential at large N**: Model Stock (scalar t, equal weights) drops to 46% win rate at N=10. The per-model λ coefficients let YOYO-Scale exploit heterogeneous model quality — assigning near-zero weight to noisy models and concentrating on the best ones — while still benefiting from noise cancellation across all models.
 
 4. **Simple Average can be harmful**: at N=10, it wins only 36.5% of the time — worse than selecting the single best model. Equal weighting allows noisy models to dominate.
 
-5. **Anchor shrinkage is critical**: YOYO-Scale's optimal total weight `∑λ` is typically well below 1.0 (e.g., ~0.28 for N=5), meaning it preserves significant base-model influence. This automatic shrinkage toward the anchor suppresses residual noise that even optimal per-model weighting cannot eliminate.
+5. **Anchor shrinkage is critical**: YOYO-Scale's optimal total weight ∑λ is typically well below 1.0 (e.g., ~0.28 for N=5), meaning it preserves significant base-model influence. This automatic shrinkage toward the anchor suppresses residual noise that even optimal per-model weighting cannot eliminate.
 
 ---
 
@@ -306,13 +306,13 @@ w_merged = w0 + sum_i lambda_i * vi
               + sum_i lambda_i * noise_i           [noise: incoherent, cancels]
 ```
 
-- **Signal**: All task vectors share the same direction `(mu - w0)`. Weighted summation preserves it.
+- **Signal**: All task vectors share the same direction (mu - w0). Weighted summation preserves it.
 - **Noise**: Independent across models, approximately orthogonal in high dimensions. Weighted summation causes cancellation.
 
 YOYO-Scale amplifies this effect by:
 1. **Upweighting low-noise models** → preserves more signal per unit of noise introduced.
 2. **Downweighting high-noise models** → reduces noise contamination.
-3. **Shrinking toward anchor** (`∑λ < 1`) → further suppresses residual noise.
+3. **Shrinking toward anchor** (∑λ < 1) → further suppresses residual noise.
 
 In high-dimensional spaces (typical of modern LLMs), the **concentration of measure** phenomenon makes noise vectors nearly perfectly orthogonal, driving win probabilities toward 100%.
 
